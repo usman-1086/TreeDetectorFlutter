@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:plant_detector/screens/subscription_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/onboarding_provider.dart'; // Provider import kiya
 
 class OnboardingScreen extends ConsumerWidget {
@@ -129,19 +130,23 @@ class OnboardingScreen extends ConsumerWidget {
                     ),
                   ),
                   child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         if (currentPage < _onboardingData.length - 1) {
                           pageController.nextPage(
                             duration: const Duration(milliseconds: 400),
                             curve: Curves.easeInOut,
                           );
                         } else {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
-                          );
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setBool('has_seen_onboarding', true);
+
+                          if (context.mounted) {
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+                            );
+                          }
                         }
-                      },
-                    style: ElevatedButton.styleFrom(
+                      },                    style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
                       shape: RoundedRectangleBorder(

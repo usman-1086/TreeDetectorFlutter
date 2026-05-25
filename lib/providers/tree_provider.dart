@@ -1,9 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-// 1. Tree Data Structure
 class TreeData {
   final String imagePath;
   final String name;
@@ -22,62 +23,137 @@ class TreeData {
     required this.disadvantages,
     required this.diseaseStatus,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'imagePath': imagePath,
+      'name': name,
+      'category': category,
+      'locations': locations,
+      'advantages': advantages,
+      'disadvantages': disadvantages,
+      'diseaseStatus': diseaseStatus,
+    };
+  }
+
+  factory TreeData.fromMap(Map<String, dynamic> map) {
+    return TreeData(
+      imagePath: map['imagePath'] ?? '',
+      name: map['name'] ?? '',
+      category: map['category'] ?? '',
+      locations: map['locations'] ?? '',
+      advantages: map['advantages'] ?? '',
+      disadvantages: map['disadvantages'] ?? '',
+      diseaseStatus: map['diseaseStatus'] ?? '',
+    );
+  }
 }
 
 class TreeHistoryNotifier extends StateNotifier<List<TreeData>> {
-  TreeHistoryNotifier() : super([]);
+  TreeHistoryNotifier() : super([]) {
+    _loadFromStorage();
+  }
+
+  Future<void> _loadFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? cachedData = prefs.getString('scanned_trees_history');
+    if (cachedData != null) {
+      final List<dynamic> decodedList = jsonDecode(cachedData);
+      state = decodedList.map((item) => TreeData.fromMap(item)).toList();
+    }
+  }
+
+  Future<void> _saveToStorage(List<TreeData> currentList) async {
+    final prefs = await SharedPreferences.getInstance();
+    final String encodedData = jsonEncode(currentList.map((item) => item.toMap()).toList());
+    await prefs.setString('scanned_trees_history', encodedData);
+  }
 
   void addTree(TreeData tree) {
-    state = [...state, tree];
+    if (!state.any((element) => element.imagePath == tree.imagePath)) {
+      final newState = [...state, tree];
+      state = newState;
+      _saveToStorage(newState);
+    }
+  }
+
+  void deleteTree(int index) {
+    final newState = List<TreeData>.from(state)..removeAt(index);
+    state = newState;
+    _saveToStorage(newState);
+  }
+
+  void clearAllHistory() {
+    state = [];
+    _saveToStorage([]);
   }
 }
+
 final treeHistoryProvider = StateNotifierProvider<TreeHistoryNotifier, List<TreeData>>((ref) {
   return TreeHistoryNotifier();
 });
 
-// 3. Gemini Detection State Provider
 class GeminiDetectionNotifier extends StateNotifier<AsyncValue<TreeData?>> {
-  GeminiDetectionNotifier() : super(const AsyncValue.data(null));
+  final Ref ref;
+  GeminiDetectionNotifier(this.ref) : super(const AsyncValue.data(null));
 
   Future<void> detectTree(String imagePath) async {
     state = const AsyncValue.loading();
+
     try {
-      // Gemini Model Setup
       final model = GenerativeModel(
-        model: 'gemini-1.5-flash', // Vision supporting fast model
-        apiKey: 'YOUR_GEMINI_API_KEY', // <--- APNI GEMINI KEY YAHAN LAGAYEIN
+        model: 'gemini-2.5-flash',
+        apiKey: 'AIzaSyCkphJ1OB3ZP8BsPkoQ9V9aEVOYovdV5SU',
       );
 
       final imageBytes = await File(imagePath).readAsBytes();
+      final imagePart = DataPart('image/jpeg', imageBytes);
 
-      // Strict Prompt taaki response hamesha ek hi format mein aaye aur hum parse kar sakein
       final prompt = TextPart(
-          "Identify this tree from the image. Give the output strictly in this format split by '##':\n"
-              "Name##Category##Places where it exists##Advantages##Disadvantages##Disease status (If any disease detected, mention it and provide recovery steps. If healthy, just say Healthy)."
+          "Analyze this image carefully. "
+              "CRITICAL: If the image does NOT clearly show a tree, plant, leaf, or flower, respond with exactly one word: NOT_A_TREE\n\n"
+              "If it is a tree/plant, identify it and provide the information strictly split by '##' in this format:\n"
+              "Common Name ##"
+              "Category (e.g., Medicinal, Evergreen, Fruit)##"
+              "Places where it exists##"
+              "Advantages##"
+              "Disadvantages##"
+              "Common Diseases, Diagnosis & Solutions: (List down 2-3 most common diseases that can happen to this specific tree species. For each disease, format it strictly like this:\n"
+              "1. Disease Name\n"
+              "• How to Diagnose: [Write signs/symptoms to identify it]\n"
+              "• Solution: [Write organic or chemical recovery steps to cure it]\n\n"
+              "Also check the provided image and if you see any active disease right now, mention that at the end.)"
       );
 
-      final imagePart = DataPart('image/jpeg', imageBytes);
+
       final response = await model.generateContent([
         Content.multi([prompt, imagePart])
       ]);
 
-      final resText = response.text;
-      if (resText != null && resText.contains('##')) {
+      final String? resText = response.text?.trim();
+
+      if (resText == null || resText.isEmpty || resText.contains("NOT_A_TREE")) {
+        throw Exception("Tree not detected or image unclear.");
+      }
+
+      if (resText.contains('##')) {
         final parts = resText.split('##');
 
-        final tree = TreeData(
+        final realTree = TreeData(
           imagePath: imagePath,
           name: parts[0].trim(),
-          category: parts[1].trim(),
-          locations: parts[2].trim(),
-          advantages: parts[3].trim(),
-          disadvantages: parts[4].trim(),
-          diseaseStatus: parts[5].trim(),
+          category: parts.length > 1 ? parts[1].trim() : "Botanical/Plant",
+          locations: parts.length > 2 ? parts[2].trim() : "Information not available",
+          advantages: parts.length > 3 ? parts[3].trim() : "Information not available",
+          disadvantages: parts.length > 4 ? parts[4].trim() : "Information not available",
+          diseaseStatus: parts.length > 5 ? parts[5].trim() : "Healthy",
         );
 
-        state = AsyncValue.data(tree);
+        ref.read(treeHistoryProvider.notifier).addTree(realTree);
+
+        state = AsyncValue.data(realTree);
       } else {
-        throw Exception("Could not identify properly. Format mismatch.");
+        throw Exception("Format parse mismatch from AI response.");
       }
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
@@ -88,6 +164,7 @@ class GeminiDetectionNotifier extends StateNotifier<AsyncValue<TreeData?>> {
     state = const AsyncValue.data(null);
   }
 }
+
 final geminiDetectionProvider = StateNotifierProvider<GeminiDetectionNotifier, AsyncValue<TreeData?>>((ref) {
-  return GeminiDetectionNotifier();
+  return GeminiDetectionNotifier(ref);
 });

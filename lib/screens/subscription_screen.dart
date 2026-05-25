@@ -44,9 +44,9 @@ class SubscriptionScreen extends ConsumerWidget {
                 ),
                 TextButton(
                   onPressed: () {
-                    // Navigator.of(context).pushReplacement(
-                    //   MaterialPageRoute(builder: (_) => const HomeScreen()),
-                    // );
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(builder: (_) => const HomeScreen()),
+                    );
                   },
                   child: const Text("Skip", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
@@ -71,7 +71,6 @@ class SubscriptionScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 25),
 
-                // Badges Row (App of the month & Featured in 20+ Countries)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

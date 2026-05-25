@@ -39,6 +39,7 @@ dependencies:
   camera:
   google_generative_ai:
   path_provider:
+  shared_preferences:
 
 
 dev_dependencies:
