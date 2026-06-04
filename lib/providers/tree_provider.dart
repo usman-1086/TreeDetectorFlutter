@@ -13,6 +13,8 @@ class TreeData {
   final String advantages;
   final String disadvantages;
   final String diseaseStatus;
+  final String healthMeasures;
+  final bool isFavourite;
 
   TreeData({
     required this.imagePath,
@@ -22,6 +24,8 @@ class TreeData {
     required this.advantages,
     required this.disadvantages,
     required this.diseaseStatus,
+    required this.healthMeasures,
+    this.isFavourite = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -33,6 +37,8 @@ class TreeData {
       'advantages': advantages,
       'disadvantages': disadvantages,
       'diseaseStatus': diseaseStatus,
+      'healthMeasures': healthMeasures,
+      'isFavourite': isFavourite,
     };
   }
 
@@ -45,6 +51,22 @@ class TreeData {
       advantages: map['advantages'] ?? '',
       disadvantages: map['disadvantages'] ?? '',
       diseaseStatus: map['diseaseStatus'] ?? '',
+      healthMeasures: map['healthMeasures'] ?? 'Regular maintenance.',
+      isFavourite: map['isFavourite'] ?? false,
+    );
+  }
+
+  TreeData copyWith({bool? isFavourite}) {
+    return TreeData(
+      imagePath: imagePath,
+      name: name,
+      category: category,
+      locations: locations,
+      advantages: advantages,
+      disadvantages: disadvantages,
+      diseaseStatus: diseaseStatus,
+      healthMeasures: healthMeasures,
+      isFavourite: isFavourite ?? this.isFavourite,
     );
   }
 }
@@ -69,12 +91,26 @@ class TreeHistoryNotifier extends StateNotifier<List<TreeData>> {
     await prefs.setString('scanned_trees_history', encodedData);
   }
 
+  void toggleFavourite(String path) {
+    state = [
+      for (final tree in state)
+        if (tree.imagePath == path) tree.copyWith(isFavourite: !tree.isFavourite) else tree
+    ];
+    _saveToStorage(state);
+  }
+
   void addTree(TreeData tree) {
     if (!state.any((element) => element.imagePath == tree.imagePath)) {
       final newState = [...state, tree];
       state = newState;
       _saveToStorage(newState);
     }
+  }
+
+  void deleteTreeByPath(String path) {
+    final newState = state.where((element) => element.imagePath != path).toList();
+    state = newState;
+    _saveToStorage(newState);
   }
 
   void deleteTree(int index) {
@@ -103,59 +139,65 @@ class GeminiDetectionNotifier extends StateNotifier<AsyncValue<TreeData?>> {
     try {
       final model = GenerativeModel(
         model: 'gemini-2.5-flash',
-        apiKey: 'AIzaSyCkphJ1OB3ZP8BsPkoQ9V9aEVOYovdV5SU',
+        apiKey: '',
+
+        generationConfig: GenerationConfig(
+          responseMimeType: 'application/json',
+          responseSchema: Schema.object(
+            properties: {
+              'name': Schema.string(description: "Common Name (Scientific Name)"),
+              'category': Schema.string(description: "Category (e.g., Fruit, Medicinal)"),
+              'locations': Schema.string(description: "Where it exists globally or locally"),
+              'advantages': Schema.string(description: "List of advantages/uses"),
+              'disadvantages': Schema.string(description: "List of disadvantages/risks"),
+              'diseaseStatus': Schema.string(description: "Disease Diagnosis & Precise Cure instructions if active infection is spotted. If healthy, write: '✨ This plant is perfectly Healthy! No active diseases detected.'"),
+              'healthMeasures': Schema.string(description: "Comprehensive daily/weekly maintenance guide for this plant species including details on watering schedule, sunlight needs, fertilizer, and seasonal tips."),
+            },
+            requiredProperties: ['name', 'category', 'locations', 'advantages', 'disadvantages', 'diseaseStatus', 'healthMeasures'],
+          ),
+        ),
       );
 
       final imageBytes = await File(imagePath).readAsBytes();
       final imagePart = DataPart('image/jpeg', imageBytes);
 
       final prompt = TextPart(
-          "Analyze this image carefully. "
-              "CRITICAL: If the image does NOT clearly show a tree, plant, leaf, or flower, respond with exactly one word: NOT_A_TREE\n\n"
-              "If it is a tree/plant, identify it and provide the information strictly split by '##' in this format:\n"
-              "Common Name ##"
-              "Category (e.g., Medicinal, Evergreen, Fruit)##"
-              "Places where it exists##"
-              "Advantages##"
-              "Disadvantages##"
-              "Common Diseases, Diagnosis & Solutions: (List down 2-3 most common diseases that can happen to this specific tree species. For each disease, format it strictly like this:\n"
-              "1. Disease Name\n"
-              "• How to Diagnose: [Write signs/symptoms to identify it]\n"
-              "• Solution: [Write organic or chemical recovery steps to cure it]\n\n"
-              "Also check the provided image and if you see any active disease right now, mention that at the end.)"
+          "Analyze this plant/leaf image very carefully. "
+              "If the image does NOT show a tree, plant, leaf, or flower, fill all JSON fields with 'NOT_A_TREE'.\n\n"
+              "Otherwise, identify the plant and populate the JSON schema values accurately based on the image provided. "
+              "Make sure both diseaseStatus and healthMeasures are completely detailed and never left short or truncated."
       );
-
 
       final response = await model.generateContent([
         Content.multi([prompt, imagePart])
       ]);
 
       final String? resText = response.text?.trim();
+      print("Gemini Strictly JSON Response: $resText");
 
       if (resText == null || resText.isEmpty || resText.contains("NOT_A_TREE")) {
         throw Exception("Tree not detected or image unclear.");
       }
 
-      if (resText.contains('##')) {
-        final parts = resText.split('##');
+      final Map<String, dynamic> jsonData = jsonDecode(resText);
 
-        final realTree = TreeData(
-          imagePath: imagePath,
-          name: parts[0].trim(),
-          category: parts.length > 1 ? parts[1].trim() : "Botanical/Plant",
-          locations: parts.length > 2 ? parts[2].trim() : "Information not available",
-          advantages: parts.length > 3 ? parts[3].trim() : "Information not available",
-          disadvantages: parts.length > 4 ? parts[4].trim() : "Information not available",
-          diseaseStatus: parts.length > 5 ? parts[5].trim() : "Healthy",
-        );
+      final realTree = TreeData(
+        imagePath: imagePath,
+        name: jsonData['name'] ?? "Unknown Plant",
+        category: jsonData['category'] ?? "Botanical/Plant",
+        locations: jsonData['locations'] ?? "Information not available",
+        advantages: jsonData['advantages'] ?? "Information not available",
+        disadvantages: jsonData['disadvantages'] ?? "Information not available",
+        diseaseStatus: jsonData['diseaseStatus'] ?? "Perfectly Healthy",
+        healthMeasures: jsonData['healthMeasures'] ?? "Regular watering and proper maintenance.",
+        isFavourite: false,
+      );
 
-        ref.read(treeHistoryProvider.notifier).addTree(realTree);
+      ref.read(treeHistoryProvider.notifier).addTree(realTree);
+      state = AsyncValue.data(realTree);
 
-        state = AsyncValue.data(realTree);
-      } else {
-        throw Exception("Format parse mismatch from AI response.");
-      }
     } catch (e, stack) {
+      print("🔥 FINAL PARSING ERROR: $e");
       state = AsyncValue.error(e, stack);
     }
   }
@@ -167,4 +209,23 @@ class GeminiDetectionNotifier extends StateNotifier<AsyncValue<TreeData?>> {
 
 final geminiDetectionProvider = StateNotifierProvider<GeminiDetectionNotifier, AsyncValue<TreeData?>>((ref) {
   return GeminiDetectionNotifier(ref);
+});
+
+final healthyTreesProvider = Provider<List<TreeData>>((ref) {
+  final allTrees = ref.watch(treeHistoryProvider);
+  return allTrees.where((tree) =>
+      tree.diseaseStatus.toLowerCase().contains('healthy')
+  ).toList();
+});
+
+final diseasedTreesProvider = Provider<List<TreeData>>((ref) {
+  final allTrees = ref.watch(treeHistoryProvider);
+  return allTrees.where((tree) =>
+  !tree.diseaseStatus.toLowerCase().contains('healthy')
+  ).toList();
+});
+
+final favouriteTreesProvider = Provider<List<TreeData>>((ref) {
+  final allTrees = ref.watch(treeHistoryProvider);
+  return allTrees.where((tree) => tree.isFavourite).toList();
 });

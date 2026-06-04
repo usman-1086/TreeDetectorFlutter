@@ -1,8 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:plant_detector/screens/dashboard_screen.dart';
 import '../providers/subscription_provider.dart';
-import 'home_screen.dart';
 
 class SubscriptionScreen extends ConsumerWidget {
   const SubscriptionScreen({super.key});
@@ -45,7 +45,7 @@ class SubscriptionScreen extends ConsumerWidget {
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const HomeScreen()),
+                      MaterialPageRoute(builder: (_) => const DashboardScreen()),
                     );
                   },
                   child: const Text("Skip", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
@@ -182,7 +182,7 @@ class SubscriptionScreen extends ConsumerWidget {
                     child: ElevatedButton(
                       onPressed: () {
                         Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const HomeScreen()),
+                          MaterialPageRoute(builder: (_) => const DashboardScreen()),
                         );
                       },
                       style: ElevatedButton.styleFrom(

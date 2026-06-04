@@ -40,6 +40,12 @@ dependencies:
   google_generative_ai:
   path_provider:
   shared_preferences:
+  image_cropper:
+  flutter_markdown:
+  fl_chart:
+  url_launcher:
+
+
 
 
 dev_dependencies:

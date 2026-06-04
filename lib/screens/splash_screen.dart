@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:plant_detector/screens/dashboard_screen.dart';
 import '../providers/splash_provider.dart';
 import 'home_screen.dart';
 import 'onboarding_screen.dart';
@@ -17,7 +18,7 @@ class SplashScreen extends ConsumerWidget {
         data: (nextScreen) {
           if (nextScreen == 'home') {
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const HomeScreen()),
+              MaterialPageRoute(builder: (_) => const DashboardScreen()),
             );
           } else {
             Navigator.of(context).pushReplacement(
