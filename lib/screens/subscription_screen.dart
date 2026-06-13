@@ -1,19 +1,61 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:plant_detector/screens/dashboard_screen.dart';
+
+import 'dashboard_screen.dart';
 import '../providers/subscription_provider.dart';
 
-class SubscriptionScreen extends ConsumerWidget {
+class SubscriptionScreen extends ConsumerStatefulWidget {
   const SubscriptionScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SubscriptionScreen> createState() => _SubscriptionScreenState();
+}
+
+class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(
+      () => ref.read(premiumStatusProvider.notifier).initPlayStoreProducts(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final double width = MediaQuery.sizeOf(context).width;
     final double height = MediaQuery.sizeOf(context).height;
 
     final selectedPlan = ref.watch(selectedPlanProvider);
     final isFreeTrialEnabled = ref.watch(freeTrialProvider);
+    final premiumData = ref.watch(premiumStatusProvider);
+    final premiumNotifier = ref.read(premiumStatusProvider.notifier);
+
+    ref.listen<PremiumInfo>(premiumStatusProvider, (previous, next) {
+      if (!(previous?.isPremium ?? false) && next.isPremium) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🎉 Premium activated!'),
+              backgroundColor: Color(0xFF2E7D32),
+              duration: Duration(seconds: 2),
+            ),
+          );
+          Navigator.of(context).pop();
+        }
+      }
+
+      if (next.errorMessage != null && next.errorMessage!.isNotEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(next.errorMessage!),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
+      }
+    });
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -27,9 +69,7 @@ class SubscriptionScreen extends ConsumerWidget {
               colorBlendMode: BlendMode.dstATop,
             ),
           ),
-          Positioned.fill(
-            child: Container(color: Colors.black.withAlpha(400)),
-          ),
+          Positioned.fill(child: Container(color: Colors.black.withAlpha(140))),
 
           Positioned(
             top: 50,
@@ -39,16 +79,30 @@ class SubscriptionScreen extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 TextButton(
-                  onPressed: () {},
-                  child: const Text("Restore", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  onPressed: premiumData.isLoading
+                      ? null
+                      : () => premiumNotifier.restorePurchases(),
+                  child: const Text(
+                    "Restore",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const DashboardScreen()),
-                    );
-                  },
-                  child: const Text("Skip", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  onPressed: () => Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const DashboardScreen()),
+                  ),
+                  child: const Text(
+                    "Skip",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -62,19 +116,26 @@ class SubscriptionScreen extends ConsumerWidget {
               children: [
                 Text(
                   "Plantoo Premium",
-                  style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16, letterSpacing: 1),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 16,
+                    letterSpacing: 1,
+                  ),
                 ),
                 const SizedBox(height: 5),
                 const Text(
                   "Premium Status",
-                  style: TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 25),
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildBadge("🏆 APP OF THE THE", "month #1"),
+                    _buildBadge("🏆 APP OF THE", "MONTH #1"),
                     const SizedBox(width: 20),
                     _buildBadge("🌿 FEATURED IN", "20+ COUNTRIES"),
                   ],
@@ -106,35 +167,37 @@ class SubscriptionScreen extends ConsumerWidget {
                 children: [
                   _buildPlanCard(
                     ref: ref,
-                    planId: 'lifetime',
+                    planId: kLifetimeId,
                     currentSelected: selectedPlan,
                     title: "Lifetime",
-                    subtitle: "\$ 220,51  \$50,40 one payment",
+                    subtitle: "\$220.51  →  \$50.40 one payment",
                     tag: "-80% OFF",
                   ),
                   const SizedBox(height: 15),
-
                   _buildPlanCard(
                     ref: ref,
-                    planId: 'yearly',
+                    planId: kYearlyId,
                     currentSelected: selectedPlan,
                     title: "Yearly",
                     subtitle: "Just \$80/year, auto renewable",
                   ),
                   const SizedBox(height: 15),
-
                   _buildPlanCard(
                     ref: ref,
-                    planId: 'monthly',
+                    planId: kMonthlyId,
                     currentSelected: selectedPlan,
                     title: "Monthly",
-                    subtitle: "Just \$10/Monthly, auto renewable",
+                    subtitle: "Just \$10/month, auto renewable",
                   ),
                   const SizedBox(height: 20),
 
                   const Text(
                     "Try 3 days free, then \$5 per week",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -144,7 +207,10 @@ class SubscriptionScreen extends ConsumerWidget {
                   const SizedBox(height: 20),
 
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade50,
                       borderRadius: BorderRadius.circular(12),
@@ -154,7 +220,11 @@ class SubscriptionScreen extends ConsumerWidget {
                       children: [
                         const Text(
                           "Enable Free Trial",
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black,
+                          ),
                         ),
                         CupertinoSwitch(
                           activeTrackColor: const Color(0xFF4CAF50),
@@ -168,40 +238,56 @@ class SubscriptionScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 25),
 
-                  Container(
+                  SizedBox(
                     width: double.infinity,
                     height: 55,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const DashboardScreen()),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
                         ),
                       ),
-                      child: const Text(
-                        "Next",
-                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                      child: ElevatedButton(
+                        onPressed: premiumData.isLoading
+                            ? null
+                            : () => premiumNotifier.startRealPurchase(
+                                selectedPlan,
+                              ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          disabledBackgroundColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: premiumData.isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : const Text(
+                                "Next",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-          )
+          ),
         ],
       ),
     );
@@ -210,9 +296,24 @@ class SubscriptionScreen extends ConsumerWidget {
   Widget _buildBadge(String title, String subtitle) {
     return Column(
       children: [
-        Text(title, style: const TextStyle(color: Colors.amber, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.amber,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+          ),
+        ),
         const SizedBox(height: 3),
-        Text(subtitle, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }
@@ -228,9 +329,7 @@ class SubscriptionScreen extends ConsumerWidget {
     final bool isSelected = planId == currentSelected;
 
     return GestureDetector(
-      onTap: () {
-        ref.read(selectedPlanProvider.notifier).state = planId;
-      },
+      onTap: () => ref.read(selectedPlanProvider.notifier).state = planId,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
@@ -245,39 +344,55 @@ class SubscriptionScreen extends ConsumerWidget {
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: isSelected ? const Color(0xFF2E7D32) : Colors.grey.shade400,
+              color: isSelected
+                  ? const Color(0xFF2E7D32)
+                  : Colors.grey.shade400,
               size: 26,
             ),
             const SizedBox(width: 15),
-            // Text Column
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
             ),
             if (tag != null)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFA5D6A7).withOpacity(0.5),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   tag,
-                  style: const TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.bold, fontSize: 12),
+                  style: const TextStyle(
+                    color: Color(0xFF1B5E20),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
                 ),
-              )
+              ),
           ],
         ),
       ),
